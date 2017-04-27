@@ -7,86 +7,99 @@
  */
 
 #include <ESP8266WiFi.h>
+#include <PubSubClient.h>
 
-const char* ssid     = "your-ssid";
-const char* password = "your-password";
+WiFiClient espClient;
+PubSubClient client(espClient);
+char msg[50];
 
-const char* host = "data.sparkfun.com";
-const char* streamId   = "....................";
-const char* privateKey = "....................";
+const char* ssid     = "Cloud_2";
+const char* ssid_password = "";
 
-void setup() {
-  Serial.begin(115200);
+const char* mqtt_server = "192.168.0.110";
+const char* clientID = "health_monitor_nicole";
+const char* outTopic = "nicole/health";
+const char* inTopic = "nicole/health";
+
+void setup_wifi() {
   delay(10);
-
   // We start by connecting to a WiFi network
-
-  Serial.println();
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-  
-  WiFi.begin(ssid, password);
-  
+
+  WiFi.begin(ssid, ssid_password);
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
 
   Serial.println("");
-  Serial.println("WiFi connected");  
+  Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
-int value = 0;
+void callback(char* topic, byte* payload, unsigned int length) {
+  // Conver the incoming byte array to a string
+  payload[length] = '\0'; // Null terminator used to terminate the char array
+  String message = (char*)payload;
 
-void loop() {
-  delay(5000);
-  ++value;
+  Serial.print("Message arrived on topic: [");
+  Serial.print(topic);
+  Serial.print("], ");
+  Serial.println(message);
 
-  Serial.print("connecting to ");
-  Serial.println(host);
-  
-  // Use WiFiClient class to create TCP connections
-  WiFiClient client;
-  const int httpPort = 80;
-  if (!client.connect(host, httpPort)) {
-    Serial.println("connection failed");
-    return;
-  }
-  
-  // We now create a URI for the request
-  String url = "/input/";
-  url += streamId;
-  url += "?private_key=";
-  url += privateKey;
-  url += "&value=";
-  url += value;
-  
-  Serial.print("Requesting URL: ");
-  Serial.println(url);
-  
-  // This will send the request to the server
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" + 
-               "Connection: close\r\n\r\n");
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 5000) {
-      Serial.println(">>> Client Timeout !");
-      client.stop();
-      return;
+//  if(message == "temperature, c"){
+//    gettemperature();
+//    Serial.print("Sending temperature:");
+//    Serial.println(temp_c);
+//    dtostrf(temp_c , 2, 2, msg);
+//    client.publish(outTopic, msg);
+//  } else if (message == "humidity"){
+//    gettemperature();
+//    Serial.print("Sending humidity:");
+//    Serial.println(humidity);
+//    dtostrf(humidity , 2, 2, msg);
+//    client.publish(outTopic, msg);
+//  }
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(clientID)) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish(outTopic, clientID);
+      // ... and resubscribe
+      client.subscribe(inTopic);
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 1 seconds");
+      // Wait 1 seconds before retrying
+      delay(1000);
     }
   }
-  
-  // Read all the lines of the reply from server and print them to Serial
-  while(client.available()){
-    String line = client.readStringUntil('\r');
-    Serial.print(line);
+}
+
+void setup() {
+  Serial.begin(115200);
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
   }
   
-  Serial.println();
-  Serial.println("closing connection");
+  client.loop();
 }
 
