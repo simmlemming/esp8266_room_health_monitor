@@ -8,18 +8,28 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <DHT.h>
+#include <string.h>
 
-WiFiClient espClient;
-PubSubClient client(espClient);
-char msg[50];
+#define DHTTYPE DHT11
+#define DHTPIN  4
 
-const char* ssid     = "Cloud_2";
+const char* ssid = "Cloud_2";
 const char* ssid_password = "";
 
 const char* mqtt_server = "192.168.0.110";
 const char* clientID = "health_monitor_nicole";
 const char* outTopic = "nicole/health";
 const char* inTopic = "nicole/health";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+DHT dht(DHTPIN, DHTTYPE);
+
+float humidity, temp;
+
+unsigned long previousMillis = 0;
+const long sensorReadInterval = 2000;
 
 void setup_wifi() {
   delay(10);
@@ -43,13 +53,13 @@ void setup_wifi() {
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // Conver the incoming byte array to a string
-  payload[length] = '\0'; // Null terminator used to terminate the char array
-  String message = (char*)payload;
-
-  Serial.print("Message arrived on topic: [");
-  Serial.print(topic);
-  Serial.print("], ");
-  Serial.println(message);
+//  payload[length] = '\0'; // Null terminator used to terminate the char array
+//  String message = (char*)payload;
+//
+//  Serial.print("Message arrived on topic: [");
+//  Serial.print(topic);
+//  Serial.print("], ");
+//  Serial.println(message);
 
 //  if(message == "temperature, c"){
 //    gettemperature();
@@ -92,14 +102,60 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  dht.begin();
 }
 
 
 void loop() {
+
   if (!client.connected()) {
     reconnect();
   }
   
   client.loop();
+
+  bool valuesUpdated = updateHealthValues();
+  if (valuesUpdated) {
+    sendLastValues();
+  }
+}
+
+void sendLastValues() {
+
+  char t[6];
+  char h[6];
+  dtostrf(temp , 2, 2, t);
+  dtostrf(humidity , 2, 2, h);
+
+  char message[96] = {0};
+  
+  strcat(message, "{\"t\" = ");
+  strcat(message, t);
+  strcat(message, ", \"h\" = ");
+  strcat(message, h);
+  strcat(message, "}");
+
+  Serial.println(message);
+
+  client.publish(outTopic, message);
+}
+
+bool updateHealthValues() {
+  unsigned long currentMillis = millis();
+ 
+  if (currentMillis - previousMillis < sensorReadInterval) {
+    return false;
+  }
+
+  previousMillis = currentMillis;   
+
+  temp = dht.readTemperature();
+  humidity = dht.readHumidity();
+  
+  if (isnan(humidity) || isnan(temp)) {
+    Serial.println("Failed to read from DHT sensor!");
+  }
+
+  return true;
 }
 
