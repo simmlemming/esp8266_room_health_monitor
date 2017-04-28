@@ -1,18 +1,11 @@
-/*
- *  This sketch sends data via HTTP GET requests to data.sparkfun.com service.
- *
- *  You need to get streamId and privateKey at data.sparkfun.com and paste them
- *  below. Or just customize this script to talk to other HTTP servers.
- *
- */
-
+#include <LiquidCrystal_I2C.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <string.h>
 
 #define DHTTYPE DHT11
-#define DHTPIN  4
+#define DHTPIN  2
 
 const char* ssid = "Cloud_2";
 const char* ssid_password = "";
@@ -25,11 +18,29 @@ const char* inTopic = "nicole/health";
 WiFiClient espClient;
 PubSubClient client(espClient);
 DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2); // i2c address, columns, lines
 
 float humidity, temp;
 
 unsigned long previousMillis = 0;
 const long sensorReadInterval = 2000;
+
+void setup() {
+  Serial.begin(115200);
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+
+  dht.begin();
+  
+  lcd.init();
+  lcd.display();
+  lcd.backlight();
+
+  lcd.setCursor(3,0);
+  lcd.clear();
+  lcd.print("Started");
+}
 
 void setup_wifi() {
   delay(10);
@@ -97,15 +108,6 @@ void reconnect() {
   }
 }
 
-void setup() {
-  Serial.begin(115200);
-  setup_wifi();
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
-  dht.begin();
-}
-
-
 void loop() {
 
   if (!client.connected()) {
@@ -117,11 +119,31 @@ void loop() {
   bool valuesUpdated = updateHealthValues();
   if (valuesUpdated) {
     sendLastValues();
+    displayLastValues();
   }
 }
 
-void sendLastValues() {
+void displayLastValues() {
+  char t[3];
+  char h[2];
+  dtostrf(temp, 2, 0, t);
+  dtostrf(humidity, 2, 0, h);
 
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(t);
+  
+  lcd.setCursor(3, 0);
+  lcd.print("C");
+
+  lcd.setCursor(0, 1);
+  lcd.print(h);
+  
+  lcd.setCursor(3, 1);
+  lcd.print("%");
+}
+
+void sendLastValues() {
   char t[6];
   char h[6];
   dtostrf(temp , 2, 2, t);
@@ -158,4 +180,3 @@ bool updateHealthValues() {
 
   return true;
 }
-
