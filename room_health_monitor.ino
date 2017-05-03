@@ -25,9 +25,12 @@ float humidity, temp;
 unsigned long previousMillis = 0;
 const long sensorReadInterval = 2000;
 
+boolean wifi_connecting = false, wifi_connected = false, wifi_error = false;
+boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
+
 void setup() {
   Serial.begin(115200);
-  setup_wifi();
+  
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
@@ -42,24 +45,67 @@ void setup() {
   lcd.print("Started");
 }
 
-void setup_wifi() {
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+void loop() {
+  bool valuesUpdated = updateHealthValues();
 
-  WiFi.begin(ssid, ssid_password);
+  if (valuesUpdated) {
+    displayLastValues();
+    if (mqtt_connected) {
+      sendLastValues();
+    }
+  }
+  
+  setup_wifi();
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  if (wifi_connected) {
+    setup_mqtt();
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+//  debugPrint();
+  displayLastValues();
+
+  client.loop();
+  delay(1000);
+}
+
+void setup_mqtt() {
+  mqtt_connected = client.connected();
+
+  if (mqtt_connected) {
+    return;
+  }
+
+  if (!mqtt_connecting) {
+    mqtt_connecting = true;
+
+    if (client.connect(clientID)) {
+      mqtt_error = false;
+      mqtt_connecting = false;
+      mqtt_connected = true;
+//      client.subscribe(inTopic);
+    } else {
+      mqtt_error = true;
+      mqtt_connecting = false;
+      mqtt_connected = false;
+    }
+  }
+}
+
+void setup_wifi() {
+  wifi_connected = WiFi.status() == WL_CONNECTED;
+  wifi_error = WiFi.status() == WL_CONNECT_FAILED;
+  if (wifi_connected || wifi_error) {
+    wifi_connecting = false;
+  }
+  
+  if (wifi_connected) {
+    return;
+  }
+
+  if (!wifi_connecting) {
+    wifi_connecting = true;  
+    WiFi.begin(ssid, ssid_password);    
+  }
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -87,42 +133,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 //  }
 }
 
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect(clientID)) {
-      Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish(outTopic, clientID);
-      // ... and resubscribe
-      client.subscribe(inTopic);
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 1 seconds");
-      // Wait 1 seconds before retrying
-      delay(1000);
-    }
-  }
-}
-
-void loop() {
-
-  if (!client.connected()) {
-    reconnect();
-  }
-  
-  client.loop();
-
-  bool valuesUpdated = updateHealthValues();
-  if (valuesUpdated) {
-    sendLastValues();
-    displayLastValues();
-  }
-}
-
 void displayLastValues() {
   char t[3];
   char h[2];
@@ -141,6 +151,21 @@ void displayLastValues() {
   
   lcd.setCursor(3, 1);
   lcd.print("%");
+
+  if (wifi_connected) {
+    lcd.setCursor(9, 0);
+    lcd.print(ssid);
+  } else {
+    lcd.setCursor(10, 0);
+    lcd.print("WIFI -");
+  }
+
+  lcd.setCursor(9, 1);
+  if (mqtt_connected) {
+    lcd.print("MQTT OK");
+  } else {
+    lcd.print("MQTT  -");
+  }
 }
 
 void sendLastValues() {
@@ -180,3 +205,29 @@ bool updateHealthValues() {
 
   return true;
 }
+
+void debugPrint() {
+  Serial.print("wifi connecting = ");
+  Serial.println(wifi_connecting);
+
+  Serial.print("wifi connected = ");
+  Serial.println(wifi_connected);
+  
+  Serial.print("wifi error = ");
+  Serial.println(wifi_error);
+
+  Serial.print("mqtt connecting = ");
+  Serial.println(mqtt_connecting);
+
+  Serial.print("mqtt connected = ");
+  Serial.println(mqtt_connected);
+  
+  Serial.print("mqtt error = ");
+  Serial.println(mqtt_error);
+
+  Serial.print("mqtt state = ");
+  Serial.println(client.state());
+
+  Serial.println();
+}
+
