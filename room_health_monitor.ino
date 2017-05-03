@@ -29,6 +29,7 @@ boolean wifi_connecting = false, wifi_connected = false, wifi_error = false;
 boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
 
 void setup() {
+  delay(100);
   Serial.begin(115200);
   
   client.setServer(mqtt_server, 1883);
@@ -39,21 +40,11 @@ void setup() {
   lcd.init();
   lcd.display();
   lcd.backlight();
-
-  lcd.setCursor(3,0);
   lcd.clear();
-  lcd.print("Started");
 }
 
 void loop() {
   bool valuesUpdated = updateHealthValues();
-
-  if (valuesUpdated) {
-    displayLastValues();
-    if (mqtt_connected) {
-      sendLastValues();
-    }
-  }
   
   setup_wifi();
 
@@ -61,11 +52,15 @@ void loop() {
     setup_mqtt();
   }
 
-//  debugPrint();
-  displayLastValues();
+  if (valuesUpdated && mqtt_connected) {
+      sendLastValues();
+  }
 
+  updateDisplay();
+
+//  debugPrint();
   client.loop();
-  delay(1000);
+  delay(200);
 }
 
 void setup_mqtt() {
@@ -133,16 +128,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
 //  }
 }
 
-void displayLastValues() {
+void updateDisplay() {
   char t[3];
   char h[2];
   dtostrf(temp, 2, 0, t);
   dtostrf(humidity, 2, 0, h);
 
-  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(t);
-  
+
   lcd.setCursor(3, 0);
   lcd.print("C");
 
@@ -152,12 +146,11 @@ void displayLastValues() {
   lcd.setCursor(3, 1);
   lcd.print("%");
 
+  lcd.setCursor(9, 0);
   if (wifi_connected) {
-    lcd.setCursor(9, 0);
     lcd.print(ssid);
   } else {
-    lcd.setCursor(10, 0);
-    lcd.print("WIFI -");
+    lcd.print("WIFI  -");
   }
 
   lcd.setCursor(9, 1);
