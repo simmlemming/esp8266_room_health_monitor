@@ -2,6 +2,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
+#include <DS3231.h>
 #include <string.h>
 
 #define DHTTYPE DHT11
@@ -19,8 +20,9 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2); // i2c address, columns, lines
+DS3231 ds_clock;
 
-float humidity, temp;
+int humidity, temp;
 
 unsigned long previousMillis = 0;
 const long sensorReadInterval = 2000;
@@ -28,6 +30,17 @@ const long sensorReadInterval = 2000;
 boolean wifi_connecting = false, wifi_connected = false, wifi_error = false;
 boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
 
+/*
+    Run this in setup to set date and time to RTC module.
+
+    ds_clock.setYear(17);
+    ds_clock.setMonth(5);
+    ds_clock.setDate(4);
+    ds_clock.setDoW(3);
+    ds_clock.setHour(22);
+    ds_clock.setMinute(23);
+    ds_clock.setSecond(20);
+ */
 void setup() {
   delay(100);
   Serial.begin(115200);
@@ -129,35 +142,43 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void updateDisplay() {
-  char t[3];
-  char h[2];
-  dtostrf(temp, 2, 0, t);
-  dtostrf(humidity, 2, 0, h);
-
+  // Temp
   lcd.setCursor(0, 0);
-  lcd.print(t);
+  lcd.print(temp, DEC);    
+  lcd.print(" C");
 
-  lcd.setCursor(3, 0);
-  lcd.print("C");
-
+  // Humidity
   lcd.setCursor(0, 1);
-  lcd.print(h);
+  lcd.print(humidity, DEC);
+  lcd.print(" %");
+
+  // Time
+  bool h12, am;
+  byte hour = ds_clock.getHour(h12, am);
+  byte minute = ds_clock.getMinute();    
   
-  lcd.setCursor(3, 1);
-  lcd.print("%");
-
-  lcd.setCursor(9, 0);
-  if (wifi_connected) {
-    lcd.print(ssid);
-  } else {
-    lcd.print("WIFI  -");
+  lcd.setCursor(11, 0);
+  if (hour < 10) {
+    lcd.print(0);
   }
+  
+  lcd.print(hour, DEC);
+  lcd.print(":");
 
-  lcd.setCursor(9, 1);
-  if (mqtt_connected) {
-    lcd.print("MQTT OK");
-  } else {
-    lcd.print("MQTT  -");
+  if (minute < 10) {
+    lcd.print(0);
+  }
+  
+  lcd.print(minute, DEC);
+
+  // Status
+  lcd.setCursor(12, 1);
+  if (!wifi_connected) {
+    lcd.print("WIFI");
+  } else if (!mqtt_connected) {
+    lcd.print("MQTT");
+  } else {    
+    lcd.print("    ");
   }
 }
 
@@ -189,12 +210,21 @@ bool updateHealthValues() {
 
   previousMillis = currentMillis;   
 
+  // float to int conversion here
   temp = dht.readTemperature();
   humidity = dht.readHumidity();
-  
-  if (isnan(humidity) || isnan(temp)) {
-    Serial.println("Failed to read from DHT sensor!");
+
+  if (temp < 0 || temp > 99) {
+    temp = 0;
   }
+
+  if (humidity < 0 || humidity > 99) {
+    humidity = 0;
+  }
+//  
+//  if (isnan(humidity) || isnan(temp)) {
+//    Serial.println("Failed to read from DHT sensor!");
+//  }
 
   return true;
 }
@@ -221,6 +251,14 @@ void debugPrint() {
   Serial.print("mqtt state = ");
   Serial.println(client.state());
 
+  bool h12, am;
+  Serial.print(ds_clock.getHour(h12, am));
+  Serial.print(":");
+  
+  Serial.print(ds_clock.getMinute());
+  Serial.print(":");
+  
+  Serial.println(ds_clock.getSecond());
   Serial.println();
 }
 
