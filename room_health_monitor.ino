@@ -7,6 +7,9 @@
 
 #define DHTTYPE DHT11
 #define DHTPIN  2
+#define DISPLAY_BACKLIGHT_PIN  12
+#define DISPLAY_BACKLIGHT_LEVEL_DAY  1023
+#define DISPLAY_BACKLIGHT_LEVEL_NIGHT  92
 
 const char* ssid = "Cloud_2";
 const char* ssid_password = "";
@@ -54,6 +57,9 @@ void setup() {
   lcd.display();
   lcd.backlight();
   lcd.clear();
+
+  pinMode(DISPLAY_BACKLIGHT_PIN, OUTPUT);
+  analogWrite(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_LEVEL_NIGHT);
 }
 
 void loop() {
@@ -180,6 +186,20 @@ void updateDisplay() {
   } else {    
     lcd.print("    ");
   }
+
+  updateDisplayBacklightLevel(hour);
+}
+
+void updateDisplayBacklightLevel(byte hour) {
+  int level;
+  
+  if (hour > 7 && hour < 21) {
+    level = DISPLAY_BACKLIGHT_LEVEL_DAY;
+  } else {
+    level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
+  }
+
+  analogWrite(DISPLAY_BACKLIGHT_PIN, level);
 }
 
 void sendLastValues() {
