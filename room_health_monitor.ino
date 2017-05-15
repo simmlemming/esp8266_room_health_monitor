@@ -26,6 +26,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // i2c address, columns, lines
 DS3231 ds_clock;
 
 int humidity, temp;
+int display_backlight_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
 
 unsigned long previousMillis = 0;
 const long sensorReadInterval = 2000;
@@ -59,7 +60,7 @@ void setup() {
   lcd.clear();
 
   pinMode(DISPLAY_BACKLIGHT_PIN, OUTPUT);
-  analogWrite(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_LEVEL_NIGHT);
+  analogWrite(DISPLAY_BACKLIGHT_PIN, display_backlight_level);
 }
 
 void loop() {
@@ -191,15 +192,18 @@ void updateDisplay() {
 }
 
 void updateDisplayBacklightLevel(byte hour) {
-  int level;
+  int new_level;
   
   if (hour > 7 && hour < 21) {
-    level = DISPLAY_BACKLIGHT_LEVEL_DAY;
+    new_level = DISPLAY_BACKLIGHT_LEVEL_DAY;
   } else {
-    level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
+    new_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
   }
 
-  analogWrite(DISPLAY_BACKLIGHT_PIN, level);
+  if (new_level != display_backlight_level) {
+    display_backlight_level = new_level;
+    analogWrite(DISPLAY_BACKLIGHT_PIN, new_level);
+  }
 }
 
 void sendLastValues() {
