@@ -8,6 +8,7 @@
 #define DHTTYPE DHT11
 #define DHTPIN  2
 #define DISPLAY_BACKLIGHT_PIN  12
+#define PHOTORESISTOR_PIN  A0
 #define DISPLAY_BACKLIGHT_LEVEL_DAY  1023
 #define DISPLAY_BACKLIGHT_LEVEL_NIGHT  92
 
@@ -36,7 +37,8 @@ boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
 
 /*
     Run this in setup to set date and time to RTC module.
-
+    
+    delay(1000);
     ds_clock.setYear(17);
     ds_clock.setMonth(5);
     ds_clock.setDate(4);
@@ -186,8 +188,12 @@ void updateDisplay() {
     lcd.print("MQTT");
   } else {    
     lcd.print("    ");
+    // Light level
+    int lightLevel = analogRead(PHOTORESISTOR_PIN);
+    lcd.setCursor(12, 1);
+    lcd.print(lightLevel, DEC);
   }
-
+  
   updateDisplayBacklightLevel(hour);
 }
 
