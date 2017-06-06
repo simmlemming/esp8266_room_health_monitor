@@ -200,7 +200,7 @@ void updateDisplay() {
 void updateDisplayBacklightLevel(byte hour) {
   int new_level;
   
-  if (hour > 7 && hour < 21) {
+  if (hour > 6 && hour < 21) {
     new_level = DISPLAY_BACKLIGHT_LEVEL_DAY;
   } else {
     new_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
