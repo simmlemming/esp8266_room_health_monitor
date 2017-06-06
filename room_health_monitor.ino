@@ -26,7 +26,7 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2); // i2c address, columns, lines
 DS3231 ds_clock;
 
-int humidity, temp;
+int humidity, temp, light;
 int display_backlight_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
 
 unsigned long previousMillis = 0;
@@ -187,11 +187,12 @@ void updateDisplay() {
   } else if (!mqtt_connected) {
     lcd.print("MQTT");
   } else {    
-    lcd.print("    ");
-    // Light level
-    int lightLevel = analogRead(PHOTORESISTOR_PIN);
-    lcd.setCursor(12, 1);
-    lcd.print(lightLevel, DEC);
+//    lcd.print("    ");
+
+    lcd.print(light, DEC);
+    if (light < 1000) {
+      lcd.print(" ");
+    }
   }
   
   updateDisplayBacklightLevel(hour);
@@ -255,7 +256,8 @@ bool updateHealthValues() {
 //  if (isnan(humidity) || isnan(temp)) {
 //    Serial.println("Failed to read from DHT sensor!");
 //  }
-
+  light = analogRead(PHOTORESISTOR_PIN);
+  
   return true;
 }
 
