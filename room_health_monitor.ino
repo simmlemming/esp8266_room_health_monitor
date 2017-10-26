@@ -3,22 +3,27 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <DS3231.h>
-#include <string.h>
+#include <ArduinoJson.h>
 
 #define DHTTYPE DHT11
 #define DHTPIN  2
 #define DISPLAY_BACKLIGHT_PIN  12
 #define PHOTORESISTOR_PIN  A0
 #define DISPLAY_BACKLIGHT_LEVEL_DAY  1023
-#define DISPLAY_BACKLIGHT_LEVEL_NIGHT  92
+#define DISPLAY_BACKLIGHT_LEVEL_NIGHT  80
 
 const char* ssid = "Cloud_2";
 const char* ssid_password = "";
 
 const char* mqtt_server = "192.168.0.110";
-const char* clientID = "health_monitor_nicole";
-const char* outTopic = "nicole/health";
-const char* inTopic = "nicole/health";
+const char* deviceName = "temp_sensor_01";
+const char* roomName = "brown_bedroom";
+const char* outTopic = "home/out";
+const char* inTopic = "home/in";
+const char* debugTopic = "home/debug";
+
+const char* CMD_STATE = "state";
+const char* NAME_ALL = "all";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -29,8 +34,7 @@ DS3231 ds_clock;
 int humidity, temp, light;
 int display_backlight_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
 
-unsigned long previousMillis = 0;
-const long sensorReadInterval = 2000;
+int lastSentHumidity = 0, lastSentTemp = 0;
 
 boolean wifi_connecting = false, wifi_connected = false, wifi_error = false;
 boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
@@ -66,14 +70,14 @@ void setup() {
 }
 
 void loop() {
-  bool valuesUpdated = updateHealthValues();
-  
   setup_wifi();
 
   if (wifi_connected) {
     setup_mqtt();
   }
 
+  bool valuesUpdated = updateValues();
+  
   if (valuesUpdated && mqtt_connected) {
       sendLastValues();
   }
@@ -82,7 +86,7 @@ void loop() {
 
 //  debugPrint();
   client.loop();
-  delay(200);
+  delay(500);
 }
 
 void setup_mqtt() {
@@ -95,11 +99,11 @@ void setup_mqtt() {
   if (!mqtt_connecting) {
     mqtt_connecting = true;
 
-    if (client.connect(clientID)) {
+    if (client.connect(deviceName)) {
       mqtt_error = false;
       mqtt_connecting = false;
       mqtt_connected = true;
-//      client.subscribe(inTopic);
+      client.subscribe(inTopic);
     } else {
       mqtt_error = true;
       mqtt_connecting = false;
@@ -126,28 +130,35 @@ void setup_wifi() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  // Conver the incoming byte array to a string
-//  payload[length] = '\0'; // Null terminator used to terminate the char array
-//  String message = (char*)payload;
-//
-//  Serial.print("Message arrived on topic: [");
-//  Serial.print(topic);
-//  Serial.print("], ");
-//  Serial.println(message);
+  if (!eq(topic, inTopic)) {
+    return;
+  }
+  
+  DynamicJsonBuffer jsonBuffer;
+  char jsonMessageBuffer[256];
 
-//  if(message == "temperature, c"){
-//    gettemperature();
-//    Serial.print("Sending temperature:");
-//    Serial.println(temp_c);
-//    dtostrf(temp_c , 2, 2, msg);
-//    client.publish(outTopic, msg);
-//  } else if (message == "humidity"){
-//    gettemperature();
-//    Serial.print("Sending humidity:");
-//    Serial.println(humidity);
-//    dtostrf(humidity , 2, 2, msg);
-//    client.publish(outTopic, msg);
-//  }
+  JsonObject& message = jsonBuffer.parseObject(payload);
+
+  if (!message.success())
+  {
+    client.publish(debugTopic, deviceName);
+    client.publish(debugTopic, "cannot parse message");
+    return;
+  }
+
+//  message.printTo(jsonMessageBuffer, sizeof(jsonMessageBuffer));  
+//  Serial.print("<-- ");
+//  Serial.println(jsonMessageBuffer);
+
+  const char* messageName = message["name"];
+  if (!eq(messageName, deviceName) && !eq(messageName, NAME_ALL)) {
+    return;
+  }
+
+  const char* messageCmd = message["cmd"];
+  if (eq(messageCmd, CMD_STATE)) {
+    sendLastValues();
+  }
 }
 
 void updateDisplay() {
@@ -187,12 +198,12 @@ void updateDisplay() {
   } else if (!mqtt_connected) {
     lcd.print("MQTT");
   } else {    
-//    lcd.print("    ");
+    lcd.print("    ");
 
-    lcd.print(light, DEC);
-    if (light < 1000) {
-      lcd.print(" ");
-    }
+//    lcd.print(light, DEC);
+//    if (light < 1000) {
+//      lcd.print(" ");
+//    }
   }
   
   updateDisplayBacklightLevel(hour);
@@ -214,51 +225,72 @@ void updateDisplayBacklightLevel(byte hour) {
 }
 
 void sendLastValues() {
-  char t[6];
-  char h[6];
-  dtostrf(temp , 2, 2, t);
-  dtostrf(humidity , 2, 2, h);
-
-  char message[96] = {0};
-  
-  strcat(message, "{\"t\" = ");
-  strcat(message, t);
-  strcat(message, ", \"h\" = ");
-  strcat(message, h);
-  strcat(message, "}");
-
-  Serial.println(message);
-
-  client.publish(outTopic, message);
+  sendTemp();
+  sendHumidity();
 }
 
-bool updateHealthValues() {
-  unsigned long currentMillis = millis();
- 
-  if (currentMillis - previousMillis < sensorReadInterval) {
-    return false;
-  }
+void sendTemp() {
+  DynamicJsonBuffer jsonBuffer;
+  char jsonMessageBuffer[256];
 
-  previousMillis = currentMillis;   
+  JsonObject& root = jsonBuffer.createObject();
+  root["name"] = "temp_sensor_01";
+  root["type"] = "temp_sensor";
+  root["room"] = roomName;
+  root["state"] = 1;
+  root["value"] = temp;
 
+  root.printTo(jsonMessageBuffer, sizeof(jsonMessageBuffer));
+  
+  Serial.println(jsonMessageBuffer);
+  client.publish(outTopic, jsonMessageBuffer);
+  
+  lastSentTemp = temp;
+}
+
+void sendHumidity() {
+  DynamicJsonBuffer jsonBuffer;
+  char jsonMessageBuffer[256];
+
+  JsonObject& root = jsonBuffer.createObject();
+  root["name"] = "humidity_sensor_01";
+  root["type"] = "humidity_sensor";
+  root["room"] = roomName;
+  root["state"] = 1;
+  root["value"] = humidity;
+  
+  root.printTo(jsonMessageBuffer, sizeof(jsonMessageBuffer));
+  
+  Serial.println(jsonMessageBuffer);
+  client.publish(outTopic, jsonMessageBuffer);
+  
+  lastSentHumidity = humidity;
+}
+
+bool updateValues() {
   // float to int conversion here
-  temp = dht.readTemperature();
-  humidity = dht.readHumidity();
+  int t = dht.readTemperature();
+  int h = dht.readHumidity();
 
-  if (temp < 0 || temp > 99) {
-    temp = 0;
+  if (t > 0 && t < 99) {
+    temp = t;
   }
 
-  if (humidity < 0 || humidity > 99) {
-    humidity = 0;
+  if (h > 0 && h < 99) {
+    humidity = h;
   }
+
 //  
 //  if (isnan(humidity) || isnan(temp)) {
 //    Serial.println("Failed to read from DHT sensor!");
 //  }
-  light = analogRead(PHOTORESISTOR_PIN);
-  
-  return true;
+//  light = analogRead(PHOTORESISTOR_PIN);
+
+  return (lastSentHumidity != humidity || lastSentTemp != temp);
+}
+
+boolean eq(const char* a1, const char* a2) {
+  return strcmp(a1, a2) == 0;
 }
 
 void debugPrint() {
