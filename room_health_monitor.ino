@@ -16,11 +16,15 @@ const char* ssid = "Cloud_2";
 const char* ssid_password = "";
 
 const char* mqtt_server = "192.168.0.110";
-const char* deviceName = "temp_sensor_01";
-const char* roomName = "brown_bedroom";
+const char* mqtt_device_name = "temp_hum_01";
+
 const char* outTopic = "home/out";
 const char* inTopic = "home/in";
 const char* debugTopic = "home/debug";
+
+const char* tempSensorName = "temp_sensor_01";
+const char* humiditySensorName = "humidity_sensor_01";
+const char* roomName = "brown_bedroom";
 
 const char* CMD_STATE = "state";
 const char* NAME_ALL = "all";
@@ -41,6 +45,7 @@ boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
 
 /*
     Run this in setup to set date and time to RTC module.
+    IMPORTANT: lcd.init() must be called before setting time (for unknown reason)
     
     delay(1000);
     ds_clock.setYear(17);
@@ -49,7 +54,7 @@ boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
     ds_clock.setDoW(3);
     ds_clock.setHour(22);
     ds_clock.setMinute(23);
-    ds_clock.setSecond(20);
+    ds_clock.setSecond(20); // +40 sec for compilation and uploading
  */
 void setup() {
   delay(100);
@@ -99,7 +104,7 @@ void setup_mqtt() {
   if (!mqtt_connecting) {
     mqtt_connecting = true;
 
-    if (client.connect(deviceName)) {
+    if (client.connect(mqtt_device_name)) {
       mqtt_error = false;
       mqtt_connecting = false;
       mqtt_connected = true;
@@ -141,7 +146,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (!message.success())
   {
-    client.publish(debugTopic, deviceName);
+    client.publish(debugTopic, mqtt_device_name);
     client.publish(debugTopic, "cannot parse message");
     return;
   }
@@ -151,7 +156,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 //  Serial.println(jsonMessageBuffer);
 
   const char* messageName = message["name"];
-  if (!eq(messageName, deviceName) && !eq(messageName, NAME_ALL)) {
+  if (!eq(messageName, tempSensorName) && !eq(messageName, humiditySensorName) && !eq(messageName, NAME_ALL)) {
     return;
   }
 
@@ -234,7 +239,7 @@ void sendTemp() {
   char jsonMessageBuffer[256];
 
   JsonObject& root = jsonBuffer.createObject();
-  root["name"] = "temp_sensor_01";
+  root["name"] = tempSensorName;
   root["type"] = "temp_sensor";
   root["room"] = roomName;
   root["state"] = 1;
@@ -253,7 +258,7 @@ void sendHumidity() {
   char jsonMessageBuffer[256];
 
   JsonObject& root = jsonBuffer.createObject();
-  root["name"] = "humidity_sensor_01";
+  root["name"] = humiditySensorName;
   root["type"] = "humidity_sensor";
   root["room"] = roomName;
   root["state"] = 1;
