@@ -43,6 +43,8 @@ int lastSentHumidity = 0, lastSentTemp = 0;
 boolean wifi_connecting = false, wifi_connected = false, wifi_error = false;
 boolean mqtt_connecting = false, mqtt_connected = false, mqtt_error = false;
 
+long wifiStrength = 0;
+long lastSentWifiStrength = 0;
 /*
     Run this in setup to set date and time to RTC module.
     IMPORTANT: lcd.init() must be called before setting time (for unknown reason)
@@ -232,6 +234,8 @@ void updateDisplayBacklightLevel(byte hour) {
 void sendLastValues() {
   sendTemp();
   sendHumidity();
+
+  lastSentWifiStrength = wifiStrength;
 }
 
 void sendTemp() {
@@ -242,6 +246,7 @@ void sendTemp() {
   root["name"] = tempSensorName;
   root["type"] = "temp_sensor";
   root["room"] = roomName;
+  root["signal"] = wifiStrength;
   root["state"] = 1;
   root["value"] = temp;
 
@@ -261,6 +266,7 @@ void sendHumidity() {
   root["name"] = humiditySensorName;
   root["type"] = "humidity_sensor";
   root["room"] = roomName;
+  root["signal"] = wifiStrength;
   root["state"] = 1;
   root["value"] = humidity;
   
@@ -285,13 +291,13 @@ bool updateValues() {
     humidity = h;
   }
 
-//  
-//  if (isnan(humidity) || isnan(temp)) {
-//    Serial.println("Failed to read from DHT sensor!");
-//  }
-//  light = analogRead(PHOTORESISTOR_PIN);
+  if (wifi_connected) {
+    wifiStrength = WiFi.RSSI();
+  } else {
+    wifiStrength = 0;
+  }
 
-  return (lastSentHumidity != humidity || lastSentTemp != temp);
+  return (lastSentHumidity != humidity || lastSentTemp != temp|| abs(lastSentWifiStrength - wifiStrength) > 3);
 }
 
 boolean eq(const char* a1, const char* a2) {
