@@ -2,7 +2,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
-#include <DS3231.h>
+#include <RTC_DS3231_DST.h>
 #include <ArduinoJson.h>
 
 #define DHTTYPE DHT11
@@ -33,7 +33,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2); // i2c address, columns, lines
-DS3231 ds_clock;
+RTC_DS3231_DST rtc;
 
 int humidity, temp, light;
 int display_backlight_level = DISPLAY_BACKLIGHT_LEVEL_NIGHT;
@@ -180,9 +180,9 @@ void updateDisplay() {
   lcd.print(" %");
 
   // Time
-  bool h12, am;
-  byte hour = ds_clock.getHour(h12, am);
-  byte minute = ds_clock.getMinute();    
+  DateTime now = rtc.now();
+  int hour = now.hour();
+  int minute = now.minute();    
   
   lcd.setCursor(11, 0);
   if (hour < 10) {
@@ -326,14 +326,14 @@ void debugPrint() {
   Serial.print("mqtt state = ");
   Serial.println(client.state());
 
-  bool h12, am;
-  Serial.print(ds_clock.getHour(h12, am));
+  DateTime now = rtc.now();
+  Serial.print(now.hour());
   Serial.print(":");
   
-  Serial.print(ds_clock.getMinute());
+  Serial.print(now.minute());
   Serial.print(":");
   
-  Serial.println(ds_clock.getSecond());
+  Serial.println(now.second());
   Serial.println();
 }
 
