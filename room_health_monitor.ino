@@ -2,7 +2,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
-#include <RTC_DS3231_DST.h>
+#include <RTC_DS3231_DST.h> // https://github.com/simmlemming/arduino_lib_RTC_DS3231_DST
 #include <ArduinoJson.h>
 
 #define DHTTYPE DHT11
